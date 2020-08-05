@@ -1,0 +1,151 @@
+version: "3.8"
+services:
+  # este es mi proxy reverso
+  traefik:
+    image: "traefik:v2.2"
+    container_name: "traefik"
+    command:
+      - "--log.level=DEBUG"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.le.acme.email=jjjjoseignacio@gmail.com"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.le.acme.tlschallenge=true"
+      # habilitar esta opcion para poner en modo prueba de certificados
+      # - "--certificatesresolvers.le.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      # # reedireccionamiento global
+      # - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      # - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  paginaweb:
+    build:
+      context: .
+      dockerfile: php.Dockerfile
+    expose:
+      - 80
+    container_name: paginaweb
+    volumes:
+      - ./web/public_html/:/var/www/html/
+      - ./web/config/:/etc/nginx/conf.d/
+    labels:
+      # reedireccionar solo una imagen para https+
+      - traefik.enable=true
+
+      - traefik.http.middlewares.https_redirect.redirectscheme.scheme=https
+      - traefik.http.routers.paginaweb.middlewares=https_redirect
+
+      - traefik.http.routers.paginaweb.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
+      - traefik.http.routers.paginaweb.entrypoints=web
+
+      - traefik.http.routers.paginaweb-secure.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
+      - traefik.http.routers.paginaweb-secure.tls.certresolver=le
+      - traefik.http.routers.paginaweb-secure.tls=true
+      - traefik.http.routers.paginaweb-secure.entrypoints=websecure
+  # whoami:
+  #   image: "containous/whoami"
+  #   container_name: "simple-service"
+  #   labels:
+  #     - traefik.enable=true
+  #     - traefik.http.routers.whoami.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
+  #     - traefik.http.routers.whoami.entrypoints=web
+  # # comandos para registro de open vpn antes de mandar a produccion
+  # # docker-compose run --rm openvpn ovpn_genconfig -u udp://<IP-DE-TU-SERVIDOR>
+  # # docker-compose run --rm openvpn ovpn_initpki
+  # # comandos despues del deploy, para crear usuarios
+  # # sin contraseña
+  # # docker-compose run --rm openvpn easyrsa build-client-full $CLIENTNAME nopass
+  # #  eliminar usuarios
+  # # Dejando los archivos crt, key y req.
+  # # docker-compose run --rm openvpn ovpn_revokeclient $CLIENTNAME
+  # # # Borrando los correspondientes archivos crt, key y req.
+  # # docker-compose run --rm openvpn ovpn_revokeclient $CLIENTNAME remove
+  openvpn:
+    cap_add:
+      - NET_ADMIN
+    image: kylemanna/openvpn
+    container_name: openvpn
+    ports:
+      - 1194:1194/udp
+    restart: always
+    volumes:
+      - ./openvpn:/etc/openvpn
+    labels:
+      # - traefik.enable=true
+      - traefik.http.routers.openvpn.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
+      # - traefik.http.routers.openvpn.entrypoints=web
+  wireguard:
+    # despues de ejecutar el deploy, cambiar las ip o dns de los archivos
+    image: linuxserver/wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Mendoza
+      - SERVERURL=2.cdnjs.cloudflare.aiolet.xyz #sub-subdomain reedireccion
+      - SERVERPORT=1195 #port de escucha
+      - PEERS=10 #cantidad de usuarios para ceder conexion
+      - PEERDNS=auto
+      - INTERNAL_SUBNET=10.13.13.0 #lan interno
+    volumes:
+      - /root/wireguard:/config #aqui se guardan las configs del vpn en la ruta /root/wireward
+      - /lib/modules:/lib/modules
+      - /usr/src:/usr/src
+    ports:
+      - 1195:1195/udp
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+    labels:
+      # - traefik.enable=true
+      - traefik.http.routers.wireguard.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
+      # - traefik.http.routers.wireguard.entrypoints=web
+  pptp:
+    image: mobtitude/vpn-pptp
+    container_name: pptp
+    ports:
+      - 1723:1723
+    privileged: yes
+    network_mode: "host"
+    volumes:
+      - ./pptp/chap-secrets:/etc/ppp/chap-secrets:ro
+    labels:
+      # - traefik.enable=true
+      - traefik.http.routers.pptp.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
+      # - traefik.http.routers.pptp.entrypoints=web
+  ipsec:
+    image: hwdsl2/ipsec-vpn-server
+    container_name: ipsec
+    ports:
+      - 500:500/udp
+      - 4500:4500/udp
+    environment:
+      - VPN_IPSEC_PSK=12345678
+      - VPN_USER=jjjjose
+      - VPN_PASSWORD=12345678
+      # - VPN_SHA2_TRUNCBUG=yes #habilitar para android, pero sera mas lento
+      # - sha2-truncbug=yes
+      - VPN_DNS_SRV1=1.1.1.1
+      - VPN_DNS_SRV2=1.0.0.1
+      # para añadir mas usuarios a la vpn
+      # - VPN_ADDL_USERS=additional_username_1 additional_username_2
+      # - VPN_ADDL_PASSWORDS=additional_password_1 additional_password_2
+    privileged: yes
+    labels:
+      # - traefik.enable=true
+      - traefik.http.routers.ipsec.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
+      # - traefik.http.routers.ipsec.entrypoints=web
