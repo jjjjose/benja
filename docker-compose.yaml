@@ -149,3 +149,13 @@ services:
       # - traefik.enable=true
       - traefik.http.routers.ipsec.rule=Host(`2.cdnjs.cloudflare.aiolet.xyz`)
       # - traefik.http.routers.ipsec.entrypoints=web
+
+  squid:
+    image: sameersbn/squid:3.5.27-2
+    container_name: squid
+    ports:
+      - 8000:8000
+    volumes:
+      - ./squid/squid.conf:/etc/squid/squid.conf
+    labels:
+      - traefik.http.routers.squid.rule=Host(`agetic.gob.bo.ami.chipnet.pro`)
