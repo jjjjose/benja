@@ -159,3 +159,14 @@ services:
       - ./squid/squid.conf:/etc/squid/squid.conf
     labels:
       - traefik.http.routers.squid.rule=Host(`agetic.gob.bo.ami.chipnet.pro`)
+
+
+  # dns: 
+  #   image: coredns/coredns
+  #   container_name: dns
+  #   restart: always
+  #   command: -conf coredns-config/Corefile
+  #   ports:
+  #     - 53:53/udp
+  #   volumes:
+  #     - ./dns:/coredns-config/  
