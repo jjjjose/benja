@@ -160,8 +160,7 @@ services:
     labels:
       - traefik.http.routers.squid.rule=Host(`agetic.gob.bo.ami.chipnet.pro`)
 
-
-  # dns: 
+  # dns:
   #   image: coredns/coredns
   #   container_name: dns
   #   restart: always
@@ -169,4 +168,22 @@ services:
   #   ports:
   #     - 53:53/udp
   #   volumes:
-  #     - ./dns:/coredns-config/  
+  #     - ./dns:/coredns-config/
+
+  netdata:
+    image: netdata/netdata
+    hostname: data
+    ports:
+      - 99:19999
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - traefik.enable=false
+      # - traefik.http.routers.netdata.rule=Host(`data.local.com`)
+      # - traefik.http.services.netdata.loadbalancer.server.port=19999
