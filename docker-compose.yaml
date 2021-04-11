@@ -170,6 +170,34 @@ services:
   #   volumes:
   #     - ./dns:/coredns-config/
 
+  # servidor para NODEJS
+  # serve:
+  #   build:
+  #     context: .
+  #     dockerfile: node.Dockerfile
+  #   command: ["npm", "start"]
+  #   expose:
+  #     - 3000
+  #   container_name: serve
+  #   volumes:
+  #     - ./server.gp/:/app/
+  #   links:
+  #     - mydb
+
+
+  # base de datos
+
+  # mydb:
+  #   image: mariadb/server:10.4
+  #   ports:
+  #     - 666:3306
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: "asnorante0@"
+  #   labels:
+  #     - traefik.enable=false
+  #   volumes:
+  #     - ./DB/:/var/lib/mysql
+
   netdata:
     image: netdata/netdata
     hostname: data
