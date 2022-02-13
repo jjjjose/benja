@@ -1,0 +1,75 @@
+version: "3.9"
+services:
+  # Proxy reverso
+  traefik:
+    image: "traefik:v2.6"
+    container_name: traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    command:
+      - "--log.level=DEBUG"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      ## Email para registro de los certificados
+      - "--certificatesresolvers.le.acme.email=jjjjoseignacio@gmail.com"
+      ## se guarda los certificados en la carpeta /letsencrypt
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.le.acme.tlschallenge=true"
+      # habilitar esta opcion para poner en modo prueba de certificados
+      # - "--certificatesresolvers.le.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      # # reedireccionamiento global
+      # - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      # - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+  ## Base de datos MariaDB
+  mariadb:
+    image: mariadb:10.7.1
+    container_name: mariadb
+    ports:
+      - "3306:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: "asnorante0@"
+    volumes:
+      - "./mariadb:/var/lib/mysql"
+
+  # test de servicios nodejs
+  test:
+    container_name: test
+    build:
+      context: .
+      dockerfile: node16.Dockerfile
+    expose:
+      - 3000
+    volumes:
+      - ./0/:/app
+      # enviar multiples comando para alpine sh
+    command:
+      - "sh"
+      - "-c"
+      - "yarn install && yarn build && yarn start"
+    labels:
+      # habilitar para que traefik maneje la reedireccion del subdominio
+      - traefik.enable=true
+      # dejar habilitado solo para http sin https
+      - traefik.http.routers.test.rule=Host(`test.tecbo.fun`)
+      - traefik.http.routers.test.entrypoints=web
+
+      # estos 2 reedireeciona la imagen a https
+      - traefik.http.middlewares.https_redirect.redirectscheme.scheme=https
+      - traefik.http.routers.test.middlewares=https_redirect
+
+      # esto crea un certificado para el subdominio
+      - traefik.http.routers.test-secure.rule=Host(`test.tecbo.fun`)
+      - traefik.http.routers.test-secure.tls.certresolver=le
+      - traefik.http.routers.test-secure.tls=true
+      - traefik.http.routers.test-secure.entrypoints=websecure
